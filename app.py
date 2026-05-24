@@ -151,7 +151,7 @@ def sidebar_controles():
             | **Deployment** | Streamlit Cloud. |
             """)
         st.markdown("---")
-        st.markdown("**👨‍💻 Desarrollado por Eliab Ezziel Zamalloa Cayo**\n\n*Ingeniería de Sistemas e Informática - Universidad Continental*")
+        st.markdown("**👨‍💻 Desarrollado por MothCode**\n\n*Ingeniería de Sistemas e Informática - Universidad Continental*")
         return modelo_seleccionado
 
 def columna_imagen(imagen_subida):
