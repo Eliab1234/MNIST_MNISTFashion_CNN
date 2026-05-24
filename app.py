@@ -15,6 +15,7 @@ import pandas as pd
 import altair as alt
 from PIL import Image
 import io
+import urllib.request 
 # Importación en la cabecera para asegurar la estabilidad en Streamlit Cloud
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.layers import Conv2D
@@ -197,6 +198,9 @@ def columna_resultados(clase_nombre, confianza, probabilidades, etiquetas):
 # ---------------------------------------------------------------------------
 # Flujo Principal
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Flujo Principal
+# ---------------------------------------------------------------------------
 def main():
     modelo_seleccionado = sidebar_controles()
     st.title("🧠 Dashboard Analítico: Redes Neuronales Convolucionales")
@@ -212,26 +216,52 @@ def main():
 
     etiquetas = ETIQUETAS_MNIST if modelo_seleccionado == "MNIST (Dígitos)" else ETIQUETAS_FASHION_MNIST
 
-    imagen_subida = st.file_uploader("Selecciona una imagen a evaluar:", type=["jpg", "jpeg", "png"])
+    # --- NUEVA SECCIÓN: Opciones de carga con Pestañas ---
+    st.subheader("📥 Selecciona la imagen a evaluar")
+    tab1, tab2 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL de internet"])
+    
+    imagen_subida = None
 
+    with tab1:
+        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"])
+        if archivo_local is not None:
+            imagen_subida = archivo_local
+
+    with tab2:
+        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (que termine en .jpg o .png):")
+        if url_imagen:
+            try:
+                # Hacer la petición web simulando ser un navegador para evitar bloqueos
+                req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    # Convertir los datos descargados en un formato que PIL pueda leer
+                    imagen_subida = io.BytesIO(response.read())
+            except Exception as e:
+                st.error(f"⚠️ No se pudo descargar la imagen. Asegúrate de que el enlace sea público y directo a la imagen. Error técnico: {e}")
+
+    # Detener la ejecución si el usuario aún no ha puesto ninguna imagen
     if imagen_subida is None:
-        st.info("⬆️ Sube una imagen para comenzar.")
+        st.info("⬆️ Esperando imagen para comenzar el análisis...")
         st.stop()
 
-    # Preprocesamiento y Predicción
+    # --- Preprocesamiento y Predicción ---
     imagen_procesada = preprocesar_imagen(imagen_subida)
     clase_nombre, confianza, probabilidades = predecir(modelo, imagen_procesada, etiquetas)
 
     col_left, col_right = st.columns([1, 1.5], gap="large")
 
     with col_left:
+        # Rebobinar la imagen en caso de que sea un archivo en memoria
+        imagen_subida.seek(0)
         columna_imagen(imagen_subida)
 
     with col_right:
         columna_resultados(clase_nombre, confianza, probabilidades, etiquetas)
 
-    # Llamar a la nueva función de visualización de convoluciones en la base de la pantalla
+    # Llamar a la visualización de convoluciones
+    imagen_subida.seek(0) # Rebobinar de nuevo por seguridad
     visualizar_convoluciones(modelo, imagen_procesada)
 
 if __name__ == "__main__":
     main()
+
