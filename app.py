@@ -181,14 +181,16 @@ def sidebar_controles():
 def columna_imagen(imagen_subida):
     """Renderiza la imagen subida por el usuario en la columna izquierda."""
     st.subheader("📷 Imagen cargada")
-    img = Image.open(imagen_subida).convert("L")
+    
+    # Solo abrimos la imagen original sin forzar conversiones visuales
+    img = Image.open(imagen_subida)
+    
+    # Usamos una configuración de st.image a prueba de errores
     st.image(
         img,
-        caption="Imagen en escala de grises procesada (28×28)",
-        use_container_width=False,
-        width=200,
+        caption="Imagen lista para predecir",
+        width=300 # Definimos solo el ancho, eliminando el parámetro conflictivo
     )
-
 
 def columna_resultados(clase_nombre, confianza, probabilidades, etiquetas):
     """Renderiza la predicción y el gráfico de confianza en la columna derecha."""
