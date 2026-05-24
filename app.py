@@ -119,7 +119,7 @@ def visualizar_convoluciones(modelo, imagen_procesada):
 
             # Mostrar la convolución en Streamlit
             with cols[i]:
-                st.image(Image.fromarray(mapa_img).resize((100, 100)), caption=f"Filtro Conv {i+1}", use_container_width=True)
+                st.image(Image.fromarray(mapa_img).resize((100, 100)), caption=f"Filtro Conv {i+1}")
     else:
         st.info("El modelo actual no cuenta con capas Conv2D estándar reconocibles.")
 
