@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     FINAL (Lógica estable 1.3.0 con UI Optimizada para Móviles)
+Versión:     1.3.0 (Producción Definitiva - Fallback de Seguridad)
 """
 
 import streamlit as st
@@ -201,69 +201,65 @@ def main():
         st.stop()
 
     etiquetas = ETIQUETAS_MNIST if modelo_seleccionado == "MNIST (Dígitos)" else ETIQUETAS_FASHION_MNIST
+
+    st.subheader("📥 Selecciona la imagen a evaluar")
+    
     es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
+    
+    if es_mnist:
+        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
+    else:
+        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "📸 Tomar Foto"])
     
     imagen_final = None 
 
-    st.subheader("📥 Método de ingreso de datos")
-
-    # =========================================================================
-    # LÓGICA ESTABLE: Menú desplegable en lugar de pestañas rotas (Tabs)
-    # =========================================================================
-    opciones = ["📁 Subir archivo local", "🌐 Pegar URL"]
-    if es_mnist:
-        opciones.append("✍️ Dibujar en Pizarra")
-    else:
-        opciones.append("📸 Tomar Foto con Cámara")
-
-    metodo = st.selectbox("Selecciona cómo quieres evaluar la imagen:", opciones)
-    st.write("") # Espaciador
-
-    if metodo == "📁 Subir archivo local":
-        archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"])
+    # Pestaña 1: Archivo Local
+    with tab1:
+        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_upload")
         if archivo_local is not None:
             imagen_final = Image.open(archivo_local)
 
-    elif metodo == "🌐 Pegar URL":
-        url_imagen = st.text_input("Ingresa el enlace directo a una imagen:")
+    # Pestaña 2: URL
+    with tab2:
+        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (.jpg o .png):")
         if url_imagen:
             try:
                 req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req) as response:
                     imagen_final = Image.open(io.BytesIO(response.read()))
             except Exception as e:
-                st.error(f"⚠️ No se pudo descargar la imagen: {e}")
+                st.error(f"⚠️ No se pudo descargar la imagen. Verifica el enlace. Error: {e}")
 
-    elif metodo == "✍️ Dibujar en Pizarra":
-        st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
-        
-        # Centramos la pizarra para que se vea impecable en móviles
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            canvas_result = st_canvas(
-                fill_color="#000000",
-                stroke_width=20,       
-                stroke_color="#FFFFFF",
-                background_color="#000000", 
-                height=280,
-                width=280,
-                drawing_mode="freedraw",
-                key="canvas_estable" 
-            )
+    # Pestaña 3: Pizarra o Cámara
+    with tab3:
+        if es_mnist:
+            st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
             
-            if st.button("Analizar Dibujo", use_container_width=True, type="primary"):
-                # Verificación defensiva contra el NameError
+            # Bloque defensivo para evitar NameError
+            try:
+                canvas_result = st_canvas(
+                    fill_color="#000000",
+                    stroke_width=20,       
+                    stroke_color="#FFFFFF",
+                    background_color="#000000", 
+                    height=280,
+                    width=280,
+                    drawing_mode="freedraw",
+                    update_streamlit=True, # Fuerza la recarga en Streamlit Cloud
+                    key="pizarra_produccion_definitiva" # Limpia el caché corrupto anterior
+                )
+                
+                # Verificación explícita de existencia
                 if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
-                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-                else:
-                    st.warning("⚠️ Dibuja algo en el recuadro antes de analizar.")
-
-    elif metodo == "📸 Tomar Foto con Cámara":
-        st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-        foto_camara = st.camera_input("Capturar Prenda")
-        if foto_camara is not None:
-            imagen_final = Image.open(foto_camara)
-    # =========================================================================
+                    if st.button("Analizar Dibujo", key="btn_dibujo"):
+                        imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+            except Exception as e:
+                st.error(f"Error al inicializar la pizarra: {e}")
+        else:
+            st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
+            foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa")
+            if foto_camara is not None:
+                imagen_final = Image.open(foto_camara)
 
     # -----------------------------------------------------------------------
     # Ejecución si hay una imagen lista
