@@ -241,15 +241,16 @@ def main():
     with tab3:
         if es_mnist:
             st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
-            canvas_result = st_canvas(
+            sult = st_canvas(
                 fill_color="#000000",
-                stroke_width=20,       # Trazo grueso como en el dataset original
-                stroke_color="#FFFFFF",# Trazo blanco
-                background_color="#000000", # Fondo negro
+                stroke_width=20,
+                stroke_color="#FFFFFF",
+                background_color="#000000",
                 height=280,
                 width=280,
                 drawing_mode="freedraw",
-                key="canvas"
+                update_streamlit=True, 
+                key="pizarra_mnist_nueva" 
             )
             # Botón exclusivo para la pizarra
             if canvas_result.image_data is not None:
