@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.3.1 (Producción Definitiva - Pestañas con Fix Móvil y Anti-Crash)
+Versión:     1.5.0 (Fix Definitivo de Renderizado en Pestañas)
 """
 
 import streamlit as st
@@ -201,27 +201,25 @@ def main():
         st.stop()
 
     etiquetas = ETIQUETAS_MNIST if modelo_seleccionado == "MNIST (Dígitos)" else ETIQUETAS_FASHION_MNIST
+    es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
+    imagen_final = None 
 
     st.subheader("📥 Selecciona la imagen a evaluar")
-    
-    es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
     
     if es_mnist:
         tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
     else:
         tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "📸 Tomar Foto"])
-    
-    imagen_final = None 
 
     # Pestaña 1: Archivo Local
     with tab1:
-        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_upload")
+        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_upload_v2")
         if archivo_local is not None:
             imagen_final = Image.open(archivo_local)
 
     # Pestaña 2: URL
     with tab2:
-        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (.jpg o .png):")
+        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (.jpg o .png):", key="url_input_v2")
         if url_imagen:
             try:
                 req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
@@ -235,31 +233,26 @@ def main():
         if es_mnist:
             st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
             
-            # 1. LA VARIABLE SE CREA AQUÍ PARA EVITAR EL NAMEERROR
-            canvas_result = None 
-            
-            try:
-                # 2. SE REDUJO A 250x250 PARA QUE QUEPA EN CUALQUIER CELULAR
+            # AISLAMIENTO: Forzamos a Streamlit a renderizar esto en su propio contenedor
+            with st.container():
                 canvas_result = st_canvas(
                     fill_color="#000000",
-                    stroke_width=18,       
+                    stroke_width=20,       
                     stroke_color="#FFFFFF",
                     background_color="#000000", 
-                    height=250,
-                    width=250,
+                    height=280,
+                    width=280,
                     drawing_mode="freedraw",
-                    key="pizarra_mnist_movil" 
+                    key="pizarra_maestra_2026_final" # <-- ESTA CLAVE NUEVA DESTRUYE EL CACHÉ ROTO
                 )
-            except Exception as e:
-                st.error(f"Error interno del servidor al cargar la pizarra: {e}")
-                
-            # Verificación segura que no crasheará si canvas_result es None
-            if canvas_result is not None and canvas_result.image_data is not None:
-                if st.button("Analizar Dibujo", key="btn_dibujo"):
+            
+            # Verificación blindada
+            if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
+                if st.button("Analizar Dibujo", key="btn_dibujo_v2"):
                     imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
         else:
             st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-            foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa")
+            foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa_v2")
             if foto_camara is not None:
                 imagen_final = Image.open(foto_camara)
 
