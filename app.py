@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.3.0 (Producción Definitiva - Fallback de Seguridad)
+Versión:     1.4.0 (Versión Definitiva y Estable para Sustentación)
 """
 
 import streamlit as st
@@ -205,60 +205,72 @@ def main():
     st.subheader("📥 Selecciona la imagen a evaluar")
     
     es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
-    
-    if es_mnist:
-        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
-    else:
-        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "📸 Tomar Foto"])
-    
     imagen_final = None 
 
-    # Pestaña 1: Archivo Local
-    with tab1:
-        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_upload")
-        if archivo_local is not None:
-            imagen_final = Image.open(archivo_local)
+    # =========================================================================
+    # LÓGICA ESTRICTA SEPARADA PARA EVITAR ERRORES DE CACHÉ
+    # =========================================================================
+    if es_mnist:
+        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
+        
+        with tab1:
+            archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_m")
+            if archivo_local is not None:
+                imagen_final = Image.open(archivo_local)
 
-    # Pestaña 2: URL
-    with tab2:
-        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (.jpg o .png):")
-        if url_imagen:
-            try:
-                req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req) as response:
-                    imagen_final = Image.open(io.BytesIO(response.read()))
-            except Exception as e:
-                st.error(f"⚠️ No se pudo descargar la imagen. Verifica el enlace. Error: {e}")
+        with tab2:
+            url_imagen = st.text_input("Ingresa el enlace directo a una imagen:", key="url_m")
+            if url_imagen:
+                try:
+                    req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req) as response:
+                        imagen_final = Image.open(io.BytesIO(response.read()))
+                except Exception as e:
+                    st.error(f"⚠️ No se pudo descargar la imagen: {e}")
 
-    # Pestaña 3: Pizarra o Cámara
-    with tab3:
-        if es_mnist:
+        with tab3:
             st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
+            # Implementación directa sin bloques try-except que oculten errores
+            canvas_result = st_canvas(
+                fill_color="#000000",
+                stroke_width=20,       
+                stroke_color="#FFFFFF",
+                background_color="#000000", 
+                height=280,
+                width=280,
+                drawing_mode="freedraw",
+                key="canvas_estable" 
+            )
             
-            # Bloque optimizado para pantallas de celular
-            try:
-                canvas_result = st_canvas(
-                    fill_color="#000000",
-                    stroke_width=18,       # Trazo ligeramente ajustado para el nuevo tamaño
-                    stroke_color="#FFFFFF",
-                    background_color="#000000", 
-                    height=250,            # Reducido para que no se desborde en celulares
-                    width=250,             # Reducido para pantallas estrechas
-                    drawing_mode="freedraw",
-                    update_streamlit=True, 
-                    key="pizarra_movil_definitiva" # Obliga al celular a recargar el componente
-                )
-                
-                if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
-                    if st.button("Analizar Dibujo", key="btn_dibujo"):
-                        imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-            except Exception as e:
-                st.error(f"Error al inicializar la pizarra: {e}")
-        else:
+            # Verificación estándar de Streamlit
+            if canvas_result.image_data is not None:
+                if st.button("Analizar Dibujo", key="btn_dibujo"):
+                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+
+    else:
+        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo", "🌐 Pegar URL", "📸 Tomar Foto"])
+        
+        with tab1:
+            archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_f")
+            if archivo_local is not None:
+                imagen_final = Image.open(archivo_local)
+
+        with tab2:
+            url_imagen = st.text_input("Ingresa el enlace directo a una imagen:", key="url_f")
+            if url_imagen:
+                try:
+                    req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req) as response:
+                        imagen_final = Image.open(io.BytesIO(response.read()))
+                except Exception as e:
+                    st.error(f"⚠️ No se pudo descargar la imagen: {e}")
+
+        with tab3:
             st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-            foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa")
+            foto_camara = st.camera_input("Capturar Prenda", key="camara_f")
             if foto_camara is not None:
                 imagen_final = Image.open(foto_camara)
+    # =========================================================================
 
     # -----------------------------------------------------------------------
     # Ejecución si hay una imagen lista
