@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.1.0 (Con visualización de capas convolucionales)
+Versión:     1.2.0 (Con Pizarra, Cámara y visualización de capas convolucionales)
 """
 
 import streamlit as st
@@ -19,6 +19,8 @@ import urllib.request
 # Importación en la cabecera para asegurar la estabilidad en Streamlit Cloud
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.layers import Conv2D
+# Importación de la pizarra interactiva
+from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------------------------
 # Configuración de página
@@ -60,8 +62,9 @@ def cargar_modelo(ruta_modelo: str):
 # ---------------------------------------------------------------------------
 # Pipeline de preprocesamiento de imágenes
 # ---------------------------------------------------------------------------
-def preprocesar_imagen(imagen_subida):
-    img = Image.open(imagen_subida).convert("L")
+def preprocesar_imagen(img):
+    # Ahora recibe un objeto PIL directamente para mayor compatibilidad
+    img = img.convert("L")
     img = img.resize((28, 28))
     img_array = np.array(img, dtype=np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
@@ -91,7 +94,6 @@ def visualizar_convoluciones(modelo, imagen_procesada):
     st.subheader("👁️ Análisis Interno: ¿Qué está viendo la CNN?")
     st.write("Los siguientes **Mapas de Características** muestran la salida matemática de la primera capa convolucional de la Red Neuronal, revelando los bordes y texturas que la IA considera importantes.")
 
-    # Buscar la primera capa Conv2D en el modelo
     capa_conv = None
     for layer in modelo.layers:
         if isinstance(layer, Conv2D):
@@ -99,11 +101,9 @@ def visualizar_convoluciones(modelo, imagen_procesada):
             break
 
     if capa_conv is not None:
-        # Crear un sub-modelo para extraer las activaciones hasta esa capa
         modelo_intermedio = Model(inputs=modelo.inputs, outputs=capa_conv.output)
         mapas = modelo_intermedio.predict(imagen_procesada, verbose=0)
 
-        # Configurar la visualización de los primeros 6 filtros
         num_filtros = mapas.shape[-1]
         filtros_a_mostrar = min(num_filtros, 6)
         
@@ -111,14 +111,12 @@ def visualizar_convoluciones(modelo, imagen_procesada):
         for i in range(filtros_a_mostrar):
             mapa_img = mapas[0, :, :, i]
             
-            # Normalizar la matriz a valores de píxeles [0, 255]
             mapa_img -= mapa_img.min()
             if mapa_img.max() > 0:
                 mapa_img /= mapa_img.max()
             mapa_img *= 255
             mapa_img = np.clip(mapa_img, 0, 255).astype(np.uint8)
 
-            # Mostrar la convolución en Streamlit
             with cols[i]:
                 st.image(Image.fromarray(mapa_img).resize((100, 100)), caption=f"Filtro Conv {i+1}")
     else:
@@ -137,7 +135,7 @@ def sidebar_controles():
         with st.expander("ℹ️ ¿Cómo usar?"):
             st.markdown("""
                 1. Selecciona un modelo.
-                2. Sube una imagen **.jpg** o **.png**.
+                2. Usa un archivo local, una URL, la cámara o la pizarra.
                 3. Analiza las probabilidades y los filtros convolucionales en tiempo real.
                 """)
         st.markdown("---")
@@ -155,9 +153,8 @@ def sidebar_controles():
         st.markdown("**👨‍💻 Desarrollado por MothCode**\n\n*Ingeniería de Sistemas e Informática - Universidad Continental*")
         return modelo_seleccionado
 
-def columna_imagen(imagen_subida):
+def columna_imagen(img):
     st.subheader("📷 Imagen de entrada")
-    img = Image.open(imagen_subida)
     st.image(img, caption="Imagen original lista para analizar", width=250)
 
 def columna_resultados(clase_nombre, confianza, probabilidades, etiquetas):
@@ -170,7 +167,6 @@ def columna_resultados(clase_nombre, confianza, probabilidades, etiquetas):
     st.metric(label="Predicción Principal", value=clase_nombre, delta=f"{confianza:.2%} de certeza")
     st.markdown("---")
 
-    # Preparar DataFrame con todas las probabilidades
     df_prob = pd.DataFrame({
         "Categoría": etiquetas,
         "Probabilidad": probabilidades,
@@ -178,26 +174,20 @@ def columna_resultados(clase_nombre, confianza, probabilidades, etiquetas):
     }).sort_values("Probabilidad", ascending=False)
 
     st.markdown("**Desglose de Probabilidades (Todas las clases):**")
-    
-    # 1. Mostrar la tabla con los porcentajes exactos
     st.dataframe(df_prob[["Categoría", "Porcentaje Exacto"]], use_container_width=True, hide_index=True)
 
-    # 2. Gráfico Horizontal usando Altair (Soporta versiones antiguas de Streamlit)
     chart = alt.Chart(df_prob).mark_bar().encode(
         x=alt.X('Probabilidad:Q', scale=alt.Scale(domain=[0, 1]), title="Nivel de Confianza"),
         y=alt.Y('Categoría:N', sort='-x', title=""),
         color=alt.condition(
             alt.datum.Categoría == clase_nombre,
-            alt.value('#1f77b4'),  # Azul para el ganador
-            alt.value('lightgray') # Gris para el resto
+            alt.value('#1f77b4'), 
+            alt.value('lightgray')
         )
     ).properties(height=250)
     
     st.altair_chart(chart, use_container_width=True)
 
-# ---------------------------------------------------------------------------
-# Flujo Principal
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Flujo Principal
 # ---------------------------------------------------------------------------
@@ -216,52 +206,83 @@ def main():
 
     etiquetas = ETIQUETAS_MNIST if modelo_seleccionado == "MNIST (Dígitos)" else ETIQUETAS_FASHION_MNIST
 
-    # --- NUEVA SECCIÓN: Opciones de carga con Pestañas ---
     st.subheader("📥 Selecciona la imagen a evaluar")
-    tab1, tab2 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL de internet"])
     
-    imagen_subida = None
+    # -----------------------------------------------------------------------
+    # Creación Dinámica de Pestañas
+    # -----------------------------------------------------------------------
+    es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
+    
+    if es_mnist:
+        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
+    else:
+        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "📸 Tomar Foto"])
+    
+    imagen_final = None # Variable global para la imagen procesada como PIL
 
+    # Pestaña 1: Archivo Local
     with tab1:
         archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"])
         if archivo_local is not None:
-            imagen_subida = archivo_local
+            imagen_final = Image.open(archivo_local)
 
+    # Pestaña 2: URL
     with tab2:
         url_imagen = st.text_input("Ingresa el enlace directo a una imagen (que termine en .jpg o .png):")
         if url_imagen:
             try:
-                # Hacer la petición web simulando ser un navegador para evitar bloqueos
                 req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req) as response:
-                    # Convertir los datos descargados en un formato que PIL pueda leer
-                    imagen_subida = io.BytesIO(response.read())
+                    imagen_final = Image.open(io.BytesIO(response.read()))
             except Exception as e:
-                st.error(f"⚠️ No se pudo descargar la imagen. Asegúrate de que el enlace sea público y directo a la imagen. Error técnico: {e}")
+                st.error(f"⚠️ No se pudo descargar la imagen. Verifica el enlace. Error: {e}")
 
-    # Detener la ejecución si el usuario aún no ha puesto ninguna imagen
-    if imagen_subida is None:
+    # Pestaña 3: Pizarra (Si es MNIST) o Cámara (Si es Fashion)
+    with tab3:
+        if es_mnist:
+            st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
+            canvas_result = st_canvas(
+                fill_color="#000000",
+                stroke_width=20,       # Trazo grueso como en el dataset original
+                stroke_color="#FFFFFF",# Trazo blanco
+                background_color="#000000", # Fondo negro
+                height=280,
+                width=280,
+                drawing_mode="freedraw",
+                key="canvas"
+            )
+            # Botón exclusivo para la pizarra
+            if canvas_result.image_data is not None:
+                if st.button("Analizar Dibujo"):
+                    # Convertir el array RGBA del canvas a imagen PIL
+                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+        else:
+            st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
+            foto_camara = st.camera_input("Capturar Prenda")
+            if foto_camara is not None:
+                imagen_final = Image.open(foto_camara)
+
+    # -----------------------------------------------------------------------
+    # Ejecución si hay una imagen lista
+    # -----------------------------------------------------------------------
+    if imagen_final is None:
         st.info("⬆️ Esperando imagen para comenzar el análisis...")
         st.stop()
 
-    # --- Preprocesamiento y Predicción ---
-    imagen_procesada = preprocesar_imagen(imagen_subida)
+    # Preprocesamiento y Predicción
+    imagen_procesada = preprocesar_imagen(imagen_final)
     clase_nombre, confianza, probabilidades = predecir(modelo, imagen_procesada, etiquetas)
 
     col_left, col_right = st.columns([1, 1.5], gap="large")
 
     with col_left:
-        # Rebobinar la imagen en caso de que sea un archivo en memoria
-        imagen_subida.seek(0)
-        columna_imagen(imagen_subida)
+        columna_imagen(imagen_final)
 
     with col_right:
         columna_resultados(clase_nombre, confianza, probabilidades, etiquetas)
 
     # Llamar a la visualización de convoluciones
-    imagen_subida.seek(0) # Rebobinar de nuevo por seguridad
     visualizar_convoluciones(modelo, imagen_procesada)
 
 if __name__ == "__main__":
     main()
-
