@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.2.0 (Con Pizarra, Cámara y visualización de capas convolucionales)
+Versión:     1.3.0 (Producción Definitiva - Fallback de Seguridad)
 """
 
 import streamlit as st
@@ -16,10 +16,8 @@ import altair as alt
 from PIL import Image
 import io
 import urllib.request 
-# Importación en la cabecera para asegurar la estabilidad en Streamlit Cloud
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.layers import Conv2D
-# Importación de la pizarra interactiva
 from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------------------------
@@ -63,7 +61,6 @@ def cargar_modelo(ruta_modelo: str):
 # Pipeline de preprocesamiento de imágenes
 # ---------------------------------------------------------------------------
 def preprocesar_imagen(img):
-    # Ahora recibe un objeto PIL directamente para mayor compatibilidad
     img = img.convert("L")
     img = img.resize((28, 28))
     img_array = np.array(img, dtype=np.float32) / 255.0
@@ -89,7 +86,6 @@ def predecir(modelo, imagen_procesada, etiquetas):
 # Visualización de Convoluciones
 # ---------------------------------------------------------------------------
 def visualizar_convoluciones(modelo, imagen_procesada):
-    """Extrae y visualiza los mapas de características de la primera capa Conv2D"""
     st.markdown("---")
     st.subheader("👁️ Análisis Interno: ¿Qué está viendo la CNN?")
     st.write("Los siguientes **Mapas de Características** muestran la salida matemática de la primera capa convolucional de la Red Neuronal, revelando los bordes y texturas que la IA considera importantes.")
@@ -208,9 +204,6 @@ def main():
 
     st.subheader("📥 Selecciona la imagen a evaluar")
     
-    # -----------------------------------------------------------------------
-    # Creación Dinámica de Pestañas
-    # -----------------------------------------------------------------------
     es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
     
     if es_mnist:
@@ -218,17 +211,17 @@ def main():
     else:
         tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "📸 Tomar Foto"])
     
-    imagen_final = None # Variable global para la imagen procesada como PIL
+    imagen_final = None 
 
     # Pestaña 1: Archivo Local
     with tab1:
-        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"])
+        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_upload")
         if archivo_local is not None:
             imagen_final = Image.open(archivo_local)
 
     # Pestaña 2: URL
     with tab2:
-        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (que termine en .jpg o .png):")
+        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (.jpg o .png):")
         if url_imagen:
             try:
                 req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
@@ -237,29 +230,34 @@ def main():
             except Exception as e:
                 st.error(f"⚠️ No se pudo descargar la imagen. Verifica el enlace. Error: {e}")
 
-    # Pestaña 3: Pizarra (Si es MNIST) o Cámara (Si es Fashion)
+    # Pestaña 3: Pizarra o Cámara
     with tab3:
         if es_mnist:
             st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
-            sult = st_canvas(
-                fill_color="#000000",
-                stroke_width=20,
-                stroke_color="#FFFFFF",
-                background_color="#000000",
-                height=280,
-                width=280,
-                drawing_mode="freedraw",
-                update_streamlit=True, 
-                key="pizarra_mnist_nueva" 
-            )
-            # Botón exclusivo para la pizarra
-            if canvas_result.image_data is not None:
-                if st.button("Analizar Dibujo"):
-                    # Convertir el array RGBA del canvas a imagen PIL
-                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+            
+            # Bloque defensivo para evitar NameError
+            try:
+                canvas_result = st_canvas(
+                    fill_color="#000000",
+                    stroke_width=20,       
+                    stroke_color="#FFFFFF",
+                    background_color="#000000", 
+                    height=280,
+                    width=280,
+                    drawing_mode="freedraw",
+                    update_streamlit=True, # Fuerza la recarga en Streamlit Cloud
+                    key="pizarra_produccion_definitiva" # Limpia el caché corrupto anterior
+                )
+                
+                # Verificación explícita de existencia
+                if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
+                    if st.button("Analizar Dibujo", key="btn_dibujo"):
+                        imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+            except Exception as e:
+                st.error(f"Error al inicializar la pizarra: {e}")
         else:
             st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-            foto_camara = st.camera_input("Capturar Prenda")
+            foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa")
             if foto_camara is not None:
                 imagen_final = Image.open(foto_camara)
 
@@ -282,7 +280,6 @@ def main():
     with col_right:
         columna_resultados(clase_nombre, confianza, probabilidades, etiquetas)
 
-    # Llamar a la visualización de convoluciones
     visualizar_convoluciones(modelo, imagen_procesada)
 
 if __name__ == "__main__":
