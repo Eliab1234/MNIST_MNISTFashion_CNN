@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     2.0.0 (Anti-Bugs / Interfaz Optimizada con st.radio)
+Versión:     FINAL (Lógica estable 1.3.0 con UI Optimizada para Móviles)
 """
 
 import streamlit as st
@@ -205,21 +205,21 @@ def main():
     
     imagen_final = None 
 
-    st.subheader("📥 Selecciona el método de entrada")
+    st.subheader("📥 Método de ingreso de datos")
 
     # =========================================================================
-    # SOLUCIÓN ANTI-BUG: Usar Radio Buttons en lugar de Pestañas (Tabs)
+    # LÓGICA ESTABLE: Menú desplegable en lugar de pestañas rotas (Tabs)
     # =========================================================================
-    opciones_entrada = ["📁 Subir archivo", "🌐 Pegar URL"]
+    opciones = ["📁 Subir archivo local", "🌐 Pegar URL"]
     if es_mnist:
-        opciones_entrada.append("✍️ Pizarra Interactiva")
+        opciones.append("✍️ Dibujar en Pizarra")
     else:
-        opciones_entrada.append("📸 Tomar Foto")
-        
-    metodo = st.radio("Elige cómo ingresar la imagen:", opciones_entrada, horizontal=True)
-    st.write("") # Espacio en blanco
+        opciones.append("📸 Tomar Foto con Cámara")
 
-    if metodo == "📁 Subir archivo":
+    metodo = st.selectbox("Selecciona cómo quieres evaluar la imagen:", opciones)
+    st.write("") # Espaciador
+
+    if metodo == "📁 Subir archivo local":
         archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"])
         if archivo_local is not None:
             imagen_final = Image.open(archivo_local)
@@ -234,29 +234,31 @@ def main():
             except Exception as e:
                 st.error(f"⚠️ No se pudo descargar la imagen: {e}")
 
-    elif metodo == "✍️ Pizarra Interactiva":
+    elif metodo == "✍️ Dibujar en Pizarra":
         st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
         
-        # Pizarra aislada de fallos de pestañas
-        canvas_result = st_canvas(
-            fill_color="#000000",
-            stroke_width=20,       
-            stroke_color="#FFFFFF",
-            background_color="#000000", 
-            height=280,
-            width=280,
-            drawing_mode="freedraw",
-            key="canvas_definitivo" 
-        )
-        
-        # El botón verifica la existencia de manera 100% segura
-        if st.button("Analizar Dibujo", type="primary"):
-            if canvas_result is not None and canvas_result.image_data is not None:
-                imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-            else:
-                st.warning("⚠️ Ocurrió un error. Intenta recargar la página.")
+        # Centramos la pizarra para que se vea impecable en móviles
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            canvas_result = st_canvas(
+                fill_color="#000000",
+                stroke_width=20,       
+                stroke_color="#FFFFFF",
+                background_color="#000000", 
+                height=280,
+                width=280,
+                drawing_mode="freedraw",
+                key="canvas_estable" 
+            )
+            
+            if st.button("Analizar Dibujo", use_container_width=True, type="primary"):
+                # Verificación defensiva contra el NameError
+                if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
+                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+                else:
+                    st.warning("⚠️ Dibuja algo en el recuadro antes de analizar.")
 
-    elif metodo == "📸 Tomar Foto":
+    elif metodo == "📸 Tomar Foto con Cámara":
         st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
         foto_camara = st.camera_input("Capturar Prenda")
         if foto_camara is not None:
