@@ -6,19 +6,18 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     3.0.0 (Estable - Fusión de lógica invertida y features avanzadas)
+Versión:     4.0.0 (Versión Definitiva 100% Móvil - Cámara Universal)
 """
 
 import streamlit as st
 import numpy as np
 import pandas as pd
 import altair as alt
-from PIL import Image, ImageOps # Importante: ImageOps agregado para invertir colores
+from PIL import Image, ImageOps
 import io
 import urllib.request 
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.layers import Conv2D
-from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------------------------
 # Configuración de página
@@ -130,8 +129,8 @@ def sidebar_controles():
         with st.expander("ℹ️ ¿Cómo usar?"):
             st.markdown("""
                 1. Selecciona un modelo.
-                2. Usa un archivo, una URL, la cámara o la pizarra.
-                3. Analiza las probabilidades y los filtros convolucionales en tiempo real.
+                2. Sube un archivo, pega una URL o usa tu cámara.
+                3. Analiza las probabilidades y los mapas de características.
                 """)
         st.markdown("---")
         st.subheader("📋 Metodología CRISP-ML(Q)")
@@ -149,8 +148,8 @@ def sidebar_controles():
         return modelo_seleccionado
 
 def columna_imagen(img):
-    st.subheader("📷 Imagen de entrada")
-    st.image(img, caption="Imagen original lista para analizar", width=250)
+    st.subheader("📷 Imagen procesada")
+    st.image(img, caption="Lista para la Red Neuronal", width=250)
 
 def columna_resultados(clase_nombre, confianza, probabilidades, etiquetas):
     st.subheader("📊 Resultados de la IA")
@@ -207,14 +206,9 @@ def main():
     st.subheader("📥 Selecciona el método de entrada")
 
     # =========================================================================
-    # LÓGICA HÍBRIDA (St.Radio simple + Pizarra de fondo blanco)
+    # LÓGICA ESTABLE: Botones simples + Cámara Universal
     # =========================================================================
-    opciones = ["📁 Subir archivo", "🌐 Pegar URL"]
-    if es_mnist:
-        opciones.append("✍️ Dibujar número")
-    else:
-        opciones.append("📸 Usar Cámara")
-
+    opciones = ["📁 Subir archivo", "🌐 Pegar URL", "📸 Usar Cámara"]
     metodo = st.radio("Opciones:", opciones, horizontal=True)
     st.write("") 
 
@@ -233,33 +227,16 @@ def main():
             except Exception as e:
                 st.error(f"⚠️ No se pudo descargar la imagen: {e}")
 
-    elif metodo == "✍️ Dibujar número":
-        st.info("🖌️ Dibuja un número del 0 al 9 en el cuadro blanco y pulsa 'Analizar Dibujo'.")
-        
-        # Pizarra con la técnica de Copilot (Fondo Blanco, Trazo Negro)
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 1)",
-            stroke_width=15,
-            stroke_color="#000000",
-            background_color="#FFFFFF",
-            width=280,
-            height=280,
-            drawing_mode="freedraw",
-            key="canvas_definitivo"
-        )
-        
-        if canvas_result.image_data is not None:
-            if st.button("Analizar Dibujo", type="primary"):
-                # Convertimos el dibujo y le invertimos los colores para la CNN
-                img_data = canvas_result.image_data.astype("uint8")
-                img_pil = Image.fromarray(img_data).convert("L")
-                imagen_final = ImageOps.invert(img_pil) 
-
     elif metodo == "📸 Usar Cámara":
-        st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-        foto_camara = st.camera_input("Capturar Prenda")
+        if es_mnist:
+            st.write("**Escribe un número oscuro en un papel claro y tómale foto:**")
+        else:
+            st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
+            
+        foto_camara = st.camera_input("Capturar Imagen")
         if foto_camara is not None:
             imagen_final = Image.open(foto_camara).convert("L")
+
     # =========================================================================
 
     # -----------------------------------------------------------------------
@@ -269,6 +246,13 @@ def main():
         st.info("⬆️ Esperando imagen para comenzar el análisis...")
         st.stop()
 
+    # Lógica de Inversión de colores para MNIST
+    if es_mnist:
+        st.info("💡 **Tip para Dígitos:** La red neuronal aprendió viendo números blancos sobre fondos negros. Si tu imagen es texto oscuro en fondo claro, mantén activada la inversión de colores.")
+        invertir = st.checkbox("Invertir colores (Recomendado para fotos en papel)", value=True)
+        if invertir:
+            imagen_final = ImageOps.invert(imagen_final)
+
     # Preprocesamiento y Predicción
     imagen_procesada = preprocesar_imagen(imagen_final)
     clase_nombre, confianza, probabilidades = predecir(modelo, imagen_procesada, etiquetas)
@@ -276,7 +260,7 @@ def main():
     col_left, col_right = st.columns([1, 1.5], gap="large")
 
     with col_left:
-        # Si la imagen viene de la pizarra, la mostramos invertida (como la ve la IA)
+        # Mostramos la imagen final que está recibiendo el modelo (ya invertida si es necesario)
         columna_imagen(imagen_final)
 
     with col_right:
