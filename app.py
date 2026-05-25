@@ -6,14 +6,14 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.5.0 (Fix Definitivo de Renderizado en Pestañas)
+Versión:     3.0.0 (Estable - Fusión de lógica invertida y features avanzadas)
 """
 
 import streamlit as st
 import numpy as np
 import pandas as pd
 import altair as alt
-from PIL import Image
+from PIL import Image, ImageOps # Importante: ImageOps agregado para invertir colores
 import io
 import urllib.request 
 from tensorflow.keras.models import load_model, Model
@@ -61,7 +61,6 @@ def cargar_modelo(ruta_modelo: str):
 # Pipeline de preprocesamiento de imágenes
 # ---------------------------------------------------------------------------
 def preprocesar_imagen(img):
-    img = img.convert("L")
     img = img.resize((28, 28))
     img_array = np.array(img, dtype=np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
@@ -131,7 +130,7 @@ def sidebar_controles():
         with st.expander("ℹ️ ¿Cómo usar?"):
             st.markdown("""
                 1. Selecciona un modelo.
-                2. Usa un archivo local, una URL, la cámara o la pizarra.
+                2. Usa un archivo, una URL, la cámara o la pizarra.
                 3. Analiza las probabilidades y los filtros convolucionales en tiempo real.
                 """)
         st.markdown("---")
@@ -202,59 +201,66 @@ def main():
 
     etiquetas = ETIQUETAS_MNIST if modelo_seleccionado == "MNIST (Dígitos)" else ETIQUETAS_FASHION_MNIST
     es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
+    
     imagen_final = None 
 
-    st.subheader("📥 Selecciona la imagen a evaluar")
-    
+    st.subheader("📥 Selecciona el método de entrada")
+
+    # =========================================================================
+    # LÓGICA HÍBRIDA (St.Radio simple + Pizarra de fondo blanco)
+    # =========================================================================
+    opciones = ["📁 Subir archivo", "🌐 Pegar URL"]
     if es_mnist:
-        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
+        opciones.append("✍️ Dibujar número")
     else:
-        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo local", "🌐 Pegar URL", "📸 Tomar Foto"])
+        opciones.append("📸 Usar Cámara")
 
-    # Pestaña 1: Archivo Local
-    with tab1:
-        archivo_local = st.file_uploader("Arrastra tu imagen aquí (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_upload_v2")
+    metodo = st.radio("Opciones:", opciones, horizontal=True)
+    st.write("") 
+
+    if metodo == "📁 Subir archivo":
+        archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"])
         if archivo_local is not None:
-            imagen_final = Image.open(archivo_local)
+            imagen_final = Image.open(archivo_local).convert("L")
 
-    # Pestaña 2: URL
-    with tab2:
-        url_imagen = st.text_input("Ingresa el enlace directo a una imagen (.jpg o .png):", key="url_input_v2")
+    elif metodo == "🌐 Pegar URL":
+        url_imagen = st.text_input("Ingresa el enlace directo a una imagen:")
         if url_imagen:
             try:
                 req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
                 with urllib.request.urlopen(req) as response:
-                    imagen_final = Image.open(io.BytesIO(response.read()))
+                    imagen_final = Image.open(io.BytesIO(response.read())).convert("L")
             except Exception as e:
-                st.error(f"⚠️ No se pudo descargar la imagen. Verifica el enlace. Error: {e}")
+                st.error(f"⚠️ No se pudo descargar la imagen: {e}")
 
-    # Pestaña 3: Pizarra o Cámara
-    with tab3:
-        if es_mnist:
-            st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
-            
-            # AISLAMIENTO: Forzamos a Streamlit a renderizar esto en su propio contenedor
-            with st.container():
-                canvas_result = st_canvas(
-                    fill_color="#000000",
-                    stroke_width=20,       
-                    stroke_color="#FFFFFF",
-                    background_color="#000000", 
-                    height=280,
-                    width=280,
-                    drawing_mode="freedraw",
-                    key="pizarra_maestra_2026_final" # <-- ESTA CLAVE NUEVA DESTRUYE EL CACHÉ ROTO
-                )
-            
-            # Verificación blindada
-            if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
-                if st.button("Analizar Dibujo", key="btn_dibujo_v2"):
-                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-        else:
-            st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-            foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa_v2")
-            if foto_camara is not None:
-                imagen_final = Image.open(foto_camara)
+    elif metodo == "✍️ Dibujar número":
+        st.info("🖌️ Dibuja un número del 0 al 9 en el cuadro blanco y pulsa 'Analizar Dibujo'.")
+        
+        # Pizarra con la técnica de Copilot (Fondo Blanco, Trazo Negro)
+        canvas_result = st_canvas(
+            fill_color="rgba(255, 255, 255, 1)",
+            stroke_width=15,
+            stroke_color="#000000",
+            background_color="#FFFFFF",
+            width=280,
+            height=280,
+            drawing_mode="freedraw",
+            key="canvas_definitivo"
+        )
+        
+        if canvas_result.image_data is not None:
+            if st.button("Analizar Dibujo", type="primary"):
+                # Convertimos el dibujo y le invertimos los colores para la CNN
+                img_data = canvas_result.image_data.astype("uint8")
+                img_pil = Image.fromarray(img_data).convert("L")
+                imagen_final = ImageOps.invert(img_pil) 
+
+    elif metodo == "📸 Usar Cámara":
+        st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
+        foto_camara = st.camera_input("Capturar Prenda")
+        if foto_camara is not None:
+            imagen_final = Image.open(foto_camara).convert("L")
+    # =========================================================================
 
     # -----------------------------------------------------------------------
     # Ejecución si hay una imagen lista
@@ -270,6 +276,7 @@ def main():
     col_left, col_right = st.columns([1, 1.5], gap="large")
 
     with col_left:
+        # Si la imagen viene de la pizarra, la mostramos invertida (como la ve la IA)
         columna_imagen(imagen_final)
 
     with col_right:
