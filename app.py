@@ -235,21 +235,20 @@ def main():
         if es_mnist:
             st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
             
-            # Bloque defensivo para evitar NameError
+            # Bloque optimizado para pantallas de celular
             try:
                 canvas_result = st_canvas(
                     fill_color="#000000",
-                    stroke_width=20,       
+                    stroke_width=18,       # Trazo ligeramente ajustado para el nuevo tamaño
                     stroke_color="#FFFFFF",
                     background_color="#000000", 
-                    height=280,
-                    width=280,
+                    height=250,            # Reducido para que no se desborde en celulares
+                    width=250,             # Reducido para pantallas estrechas
                     drawing_mode="freedraw",
-                    update_streamlit=True, # Fuerza la recarga en Streamlit Cloud
-                    key="pizarra_produccion_definitiva" # Limpia el caché corrupto anterior
+                    update_streamlit=True, 
+                    key="pizarra_movil_definitiva" # Obliga al celular a recargar el componente
                 )
                 
-                # Verificación explícita de existencia
                 if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
                     if st.button("Analizar Dibujo", key="btn_dibujo"):
                         imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
