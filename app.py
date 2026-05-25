@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.4.0 (Versión Definitiva y Estable para Sustentación)
+Versión:     2.0.0 (Anti-Bugs / Interfaz Optimizada con st.radio)
 """
 
 import streamlit as st
@@ -201,75 +201,66 @@ def main():
         st.stop()
 
     etiquetas = ETIQUETAS_MNIST if modelo_seleccionado == "MNIST (Dígitos)" else ETIQUETAS_FASHION_MNIST
-
-    st.subheader("📥 Selecciona la imagen a evaluar")
-    
     es_mnist = (modelo_seleccionado == "MNIST (Dígitos)")
+    
     imagen_final = None 
 
+    st.subheader("📥 Selecciona el método de entrada")
+
     # =========================================================================
-    # LÓGICA ESTRICTA SEPARADA PARA EVITAR ERRORES DE CACHÉ
+    # SOLUCIÓN ANTI-BUG: Usar Radio Buttons en lugar de Pestañas (Tabs)
     # =========================================================================
+    opciones_entrada = ["📁 Subir archivo", "🌐 Pegar URL"]
     if es_mnist:
-        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo", "🌐 Pegar URL", "✍️ Dibujar en Pizarra"])
-        
-        with tab1:
-            archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_m")
-            if archivo_local is not None:
-                imagen_final = Image.open(archivo_local)
-
-        with tab2:
-            url_imagen = st.text_input("Ingresa el enlace directo a una imagen:", key="url_m")
-            if url_imagen:
-                try:
-                    req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req) as response:
-                        imagen_final = Image.open(io.BytesIO(response.read()))
-                except Exception as e:
-                    st.error(f"⚠️ No se pudo descargar la imagen: {e}")
-
-        with tab3:
-            st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
-            # Implementación directa sin bloques try-except que oculten errores
-            canvas_result = st_canvas(
-                fill_color="#000000",
-                stroke_width=20,       
-                stroke_color="#FFFFFF",
-                background_color="#000000", 
-                height=280,
-                width=280,
-                drawing_mode="freedraw",
-                key="canvas_estable" 
-            )
-            
-            # Verificación estándar de Streamlit
-            if canvas_result.image_data is not None:
-                if st.button("Analizar Dibujo", key="btn_dibujo"):
-                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-
+        opciones_entrada.append("✍️ Pizarra Interactiva")
     else:
-        tab1, tab2, tab3 = st.tabs(["📁 Subir archivo", "🌐 Pegar URL", "📸 Tomar Foto"])
+        opciones_entrada.append("📸 Tomar Foto")
         
-        with tab1:
-            archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"], key="file_f")
-            if archivo_local is not None:
-                imagen_final = Image.open(archivo_local)
+    metodo = st.radio("Elige cómo ingresar la imagen:", opciones_entrada, horizontal=True)
+    st.write("") # Espacio en blanco
 
-        with tab2:
-            url_imagen = st.text_input("Ingresa el enlace directo a una imagen:", key="url_f")
-            if url_imagen:
-                try:
-                    req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req) as response:
-                        imagen_final = Image.open(io.BytesIO(response.read()))
-                except Exception as e:
-                    st.error(f"⚠️ No se pudo descargar la imagen: {e}")
+    if metodo == "📁 Subir archivo":
+        archivo_local = st.file_uploader("Arrastra tu imagen (JPG / PNG):", type=["jpg", "jpeg", "png"])
+        if archivo_local is not None:
+            imagen_final = Image.open(archivo_local)
 
-        with tab3:
-            st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
-            foto_camara = st.camera_input("Capturar Prenda", key="camara_f")
-            if foto_camara is not None:
-                imagen_final = Image.open(foto_camara)
+    elif metodo == "🌐 Pegar URL":
+        url_imagen = st.text_input("Ingresa el enlace directo a una imagen:")
+        if url_imagen:
+            try:
+                req = urllib.request.Request(url_imagen, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    imagen_final = Image.open(io.BytesIO(response.read()))
+            except Exception as e:
+                st.error(f"⚠️ No se pudo descargar la imagen: {e}")
+
+    elif metodo == "✍️ Pizarra Interactiva":
+        st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
+        
+        # Pizarra aislada de fallos de pestañas
+        canvas_result = st_canvas(
+            fill_color="#000000",
+            stroke_width=20,       
+            stroke_color="#FFFFFF",
+            background_color="#000000", 
+            height=280,
+            width=280,
+            drawing_mode="freedraw",
+            key="canvas_definitivo" 
+        )
+        
+        # El botón verifica la existencia de manera 100% segura
+        if st.button("Analizar Dibujo", type="primary"):
+            if canvas_result is not None and canvas_result.image_data is not None:
+                imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+            else:
+                st.warning("⚠️ Ocurrió un error. Intenta recargar la página.")
+
+    elif metodo == "📸 Tomar Foto":
+        st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
+        foto_camara = st.camera_input("Capturar Prenda")
+        if foto_camara is not None:
+            imagen_final = Image.open(foto_camara)
     # =========================================================================
 
     # -----------------------------------------------------------------------
