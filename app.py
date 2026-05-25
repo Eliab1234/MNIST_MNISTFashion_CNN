@@ -6,7 +6,7 @@ Modelos:     MNIST (Dígitos Manuscritos) y Fashion MNIST (Prendas de Vestir)
 Framework:   Streamlit + TensorFlow/Keras + Pandas + Altair
 
 Autor:       Eliab Ezziel Zamalloa Cayo
-Versión:     1.3.0 (Producción Definitiva - Fallback de Seguridad)
+Versión:     1.3.1 (Producción Definitiva - Pestañas con Fix Móvil y Anti-Crash)
 """
 
 import streamlit as st
@@ -235,26 +235,28 @@ def main():
         if es_mnist:
             st.write("**Dibuja un número del 0 al 9 en el cuadro negro:**")
             
-            # Bloque defensivo para evitar NameError
+            # 1. LA VARIABLE SE CREA AQUÍ PARA EVITAR EL NAMEERROR
+            canvas_result = None 
+            
             try:
+                # 2. SE REDUJO A 250x250 PARA QUE QUEPA EN CUALQUIER CELULAR
                 canvas_result = st_canvas(
                     fill_color="#000000",
-                    stroke_width=20,       
+                    stroke_width=18,       
                     stroke_color="#FFFFFF",
                     background_color="#000000", 
-                    height=280,
-                    width=280,
+                    height=250,
+                    width=250,
                     drawing_mode="freedraw",
-                    update_streamlit=True, # Fuerza la recarga en Streamlit Cloud
-                    key="pizarra_produccion_definitiva" # Limpia el caché corrupto anterior
+                    key="pizarra_mnist_movil" 
                 )
-                
-                # Verificación explícita de existencia
-                if canvas_result is not None and getattr(canvas_result, 'image_data', None) is not None:
-                    if st.button("Analizar Dibujo", key="btn_dibujo"):
-                        imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
             except Exception as e:
-                st.error(f"Error al inicializar la pizarra: {e}")
+                st.error(f"Error interno del servidor al cargar la pizarra: {e}")
+                
+            # Verificación segura que no crasheará si canvas_result es None
+            if canvas_result is not None and canvas_result.image_data is not None:
+                if st.button("Analizar Dibujo", key="btn_dibujo"):
+                    imagen_final = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
         else:
             st.write("**Usa tu cámara para tomarle foto a una prenda de ropa:**")
             foto_camara = st.camera_input("Capturar Prenda", key="camara_ropa")
